@@ -102,12 +102,35 @@ export const analyzeImage = ({
           const { fullStream } = streamText({
             model: myProvider.languageModel("chat-model-large"),
             system:
-              "Analyze this clothing item and create a detailed tech pack with specifications, measurements, and material information. Include sections for design details, construction notes, and care instructions. Markdown is supported.",
+              "Analyze this clothing item and create a structured tech pack with the following format:" +
+              "## Brand\n" +
+              "[Brand Name]\n\n" +
+              "## Designer\n" +
+              "[Designer Name]\n\n" +
+              "## Description\n" +
+              "[Brief description of the garment type, e.g., WOMENSWEAR, MENSWEAR]\n\n" +
+              "## Season\n" +
+              "[Season information, e.g., SS24, FW23]\n\n" +
+              "## Style Name\n" +
+              "[Style name of the garment]\n\n" +
+              "## Style Number\n" +
+              "[Style number/code]\n\n" +
+              "## Main Fabric\n" +
+              "[Main fabric description]\n\n" +
+              "## Size Range\n" +
+              "[Available sizes with sample size in brackets, e.g., XS S [M] L XL]\n\n" +
+              "## Measurements\n" +
+              "[Key measurements in a structured format]\n\n" +
+              "## Bill of Materials\n" +
+              "Please list materials in this format - each item on a new line:\n" +
+              "- [Item name], [Description], [Color], [Code], [Quantity], [Supplier]\n" +
+              "- [Item name], [Description], [Color], [Code], [Quantity], [Supplier]\n\n" +
+              "Markdown is supported. Focus on accuracy and professional presentation.",
             messages: [
               {
                 role: "user",
                 content:
-                  "Please analyze this clothing item and create a detailed tech pack.",
+                  "Please analyze this clothing item and create a detailed tech pack following the structured format. DO not add any title or extra categories besides the template",
                 experimental_attachments: [imageAttachment],
               },
             ],
