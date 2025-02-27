@@ -208,6 +208,7 @@ export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
             season: "N/A",
             date: new Date().toISOString().split("T")[0].replace(/-/g, "."),
             mainFabric: "FABRIC",
+            garmentColor: "BLACK",
             styleName: "STYLE NAME HERE",
             styleNumber: "ABC123",
             sizeRange: "XS S [M] L XL XXL",
@@ -274,6 +275,12 @@ export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
               !text.toLowerCase().includes("materials")
             ) {
               info.mainFabric = value || info.mainFabric;
+            } else if (
+              text.toLowerCase().includes("garment color") ||
+              (text.toLowerCase().includes("color") &&
+                !text.toLowerCase().includes("materials"))
+            ) {
+              info.garmentColor = value || info.garmentColor;
             } else if (text.toLowerCase().includes("style name")) {
               info.styleName = value || info.styleName;
             } else if (
@@ -287,14 +294,7 @@ export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
           });
 
           // Extract bill of materials if available
-          const bomItems: Array<{
-            item: string;
-            description: string;
-            color: string;
-            code: string;
-            qty: string;
-            supplier: string;
-          }> = [];
+          const bomItems: Array<string> = [];
 
           // Look for a bill of materials section
           const bomHeading = Array.from(headings).find(
@@ -305,99 +305,58 @@ export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
           );
 
           if (bomHeading) {
-            // Try to find a list after the BOM heading
+            // Try to find BOM items after the BOM heading
             let currentElement = bomHeading.nextElementSibling;
             while (
               currentElement &&
               !currentElement.matches("h1, h2, h3, h4, h5, h6")
             ) {
-              // Check if it's a list item
+              // Check if it's a paragraph or list item with content
               if (
+                (currentElement.tagName === "P" ||
+                  currentElement.tagName === "LI") &&
+                currentElement.textContent?.trim()
+              ) {
+                const text = currentElement.textContent?.trim() || "";
+                // Skip if it's just a header text
+                if (
+                  !text.toLowerCase().includes("bill of materials") &&
+                  !text.toLowerCase().includes("please list materials")
+                ) {
+                  bomItems.push(text);
+                }
+              } else if (
                 currentElement.tagName === "UL" ||
                 currentElement.tagName === "OL"
               ) {
+                // If it's a list, get all list items
                 const items = currentElement.querySelectorAll("li");
-                items.forEach((item, index) => {
-                  if (index < 11) {
-                    // Limit to 11 items (A-K)
-                    const text = item.textContent?.trim() || "";
-                    // Split by commas or by semicolons
-                    const parts = text.includes(";")
-                      ? text.split(";").map((part) => part.trim())
-                      : text.split(",").map((part) => part.trim());
-
-                    bomItems.push({
-                      item: parts[0] || "",
-                      description: parts[1] || "",
-                      color: parts[2] || "",
-                      code: parts[3] || "",
-                      qty: parts[4] || "",
-                      supplier: parts[5] || "",
-                    });
+                items.forEach((item) => {
+                  const text = item.textContent?.trim() || "";
+                  if (text) {
+                    bomItems.push(text);
                   }
                 });
-                break;
-              } else if (currentElement.tagName === "P") {
-                // Check if paragraph contains material information
-                const text = currentElement.textContent?.trim() || "";
-                if (text && !text.toLowerCase().includes("bill of materials")) {
-                  // Split by commas or by semicolons
-                  const parts = text.includes(";")
-                    ? text.split(";").map((part) => part.trim())
-                    : text.split(",").map((part) => part.trim());
-
-                  if (parts.length >= 2) {
-                    bomItems.push({
-                      item: parts[0] || "",
-                      description: parts[1] || "",
-                      color: parts[2] || "",
-                      code: parts[3] || "",
-                      qty: parts[4] || "",
-                      supplier: parts[5] || "",
-                    });
-                  }
-                }
               }
               currentElement = currentElement.nextElementSibling;
             }
           }
 
-          // If no BOM items were found, look for any lists in the document that might contain materials
+          // If no BOM items were found, check for placeholders
           if (bomItems.length === 0) {
-            const lists = content.querySelectorAll("ul, ol");
-            lists.forEach((list) => {
-              // Check if this list is likely to be a bill of materials
-              const previousElement = list.previousElementSibling;
-              const previousText =
-                previousElement?.textContent?.toLowerCase() || "";
+            // Look for BOM Item placeholders in the content
+            const bomItemRegex = /\{\{BOM Item \d+\}\}/g;
+            const contentText = content.innerHTML;
+            let match;
+            let count = 0;
 
-              if (
-                previousText.includes("material") ||
-                previousText.includes("fabric") ||
-                previousText.includes("bom")
-              ) {
-                const items = list.querySelectorAll("li");
-                items.forEach((item, index) => {
-                  if (index < 11) {
-                    // Limit to 11 items (A-K)
-                    const text = item.textContent?.trim() || "";
-                    // Split by commas or by semicolons
-                    const parts = text.includes(";")
-                      ? text.split(";").map((part) => part.trim())
-                      : text.split(",").map((part) => part.trim());
-
-                    bomItems.push({
-                      item: parts[0] || "",
-                      description: parts[1] || "",
-                      color: parts[2] || "",
-                      code: parts[3] || "",
-                      qty: parts[4] || "",
-                      supplier: parts[5] || "",
-                    });
-                  }
-                });
-              }
-            });
+            while (
+              (match = bomItemRegex.exec(contentText)) !== null &&
+              count < 10
+            ) {
+              bomItems.push("BOM Item " + (count + 1));
+              count++;
+            }
           }
 
           return { info, bomItems };
@@ -501,9 +460,17 @@ export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
         row2.appendChild(createTableCell("DATE", info.date));
         row2.appendChild(createTableCell("MAIN FABRIC", info.mainFabric));
         infoTable2.appendChild(row2);
-        pdfTemplate.appendChild(infoTable2);
 
-        // Row 3: Style Name, Style #, Size Range
+        // Row 3: Color
+        const infoTable2b = createInfoTable();
+        const row2b = createTableRow();
+        row2b.appendChild(createTableCell("COLOR", info.garmentColor, 3));
+        infoTable2b.appendChild(row2b);
+
+        pdfTemplate.appendChild(infoTable2);
+        pdfTemplate.appendChild(infoTable2b);
+
+        // Row 4: Style Name, Style #, Size Range
         const infoTable3 = createInfoTable();
         const row3 = createTableRow();
         row3.appendChild(createTableCell("STYLE NAME", info.styleName));
@@ -607,16 +574,8 @@ export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
         // BOM table header row
         const bomHeaderRow = document.createElement("tr");
 
-        const headers = [
-          "#",
-          "ITEM",
-          "DESCRIPTION",
-          "COLOR",
-          "CODE",
-          "QTY",
-          "SUPPLIER",
-        ];
-        const widths = ["5%", "15%", "30%", "15%", "10%", "10%", "15%"];
+        const headers = ["#", "ITEM", "DESCRIPTION"];
+        const widths = ["5%", "30%", "65%"];
 
         headers.forEach((header, index) => {
           const th = document.createElement("th");
@@ -635,55 +594,87 @@ export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
         // BOM table content rows
         const letters = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"];
 
-        letters.forEach((letter, index) => {
-          const bomRow = document.createElement("tr");
+        bomItems.forEach((item, index) => {
+          if (index < letters.length) {
+            // Limit to available letters
+            const bomRow = document.createElement("tr");
 
-          // Letter cell
-          const letterCell = document.createElement("td");
-          letterCell.textContent = letter;
-          letterCell.style.border = "1px solid #000";
-          letterCell.style.padding = "6px 8px";
-          letterCell.style.fontSize = "12px";
-          letterCell.style.textAlign = "center";
-          bomRow.appendChild(letterCell);
+            // Letter cell
+            const letterCell = document.createElement("td");
+            letterCell.textContent = letters[index];
+            letterCell.style.border = "1px solid #000";
+            letterCell.style.padding = "6px 8px";
+            letterCell.style.fontSize = "12px";
+            letterCell.style.textAlign = "center";
+            bomRow.appendChild(letterCell);
 
-          // Get BOM item data if available
-          const bomItem = bomItems[index] || {
-            item: "",
-            description: "",
-            color: "",
-            code: "",
-            qty: "",
-            supplier: "",
-          };
+            // Item name cell - use first part if comma-separated
+            const itemCell = document.createElement("td");
+            const itemParts = item.split(",");
+            itemCell.textContent = itemParts[0] || item;
+            itemCell.style.border = "1px solid #000";
+            itemCell.style.padding = "6px 8px";
+            itemCell.style.fontSize = "12px";
+            bomRow.appendChild(itemCell);
 
-          // Add cells with data from bomItems if available
-          const cellData = [
-            bomItem.item,
-            bomItem.description,
-            bomItem.color,
-            bomItem.code,
-            bomItem.qty,
-            bomItem.supplier,
-          ];
-
-          cellData.forEach((data, cellIndex) => {
-            const cell = document.createElement("td");
-            cell.textContent = data;
-            cell.style.border = "1px solid #000";
-            cell.style.padding = "6px 8px";
-            cell.style.fontSize = "12px";
+            // Description cell - use rest of text if comma-separated
+            const descCell = document.createElement("td");
+            descCell.textContent =
+              itemParts.length > 1 ? itemParts.slice(1).join(",").trim() : "";
+            descCell.style.border = "1px solid #000";
+            descCell.style.padding = "6px 8px";
+            descCell.style.fontSize = "12px";
+            bomRow.appendChild(descCell);
 
             // Add alternating row background
             if (index % 2 === 1) {
-              cell.style.backgroundColor = "#f9f9f9";
+              letterCell.style.backgroundColor = "#f9f9f9";
+              itemCell.style.backgroundColor = "#f9f9f9";
+              descCell.style.backgroundColor = "#f9f9f9";
             }
 
-            bomRow.appendChild(cell);
-          });
-
-          bomTable.appendChild(bomRow);
+            bomTable.appendChild(bomRow);
+          }
         });
+
+        // If no BOM items, add empty rows
+        if (bomItems.length === 0) {
+          for (let i = 0; i < 3; i++) {
+            const bomRow = document.createElement("tr");
+
+            // Letter cell
+            const letterCell = document.createElement("td");
+            letterCell.textContent = letters[i];
+            letterCell.style.border = "1px solid #000";
+            letterCell.style.padding = "6px 8px";
+            letterCell.style.fontSize = "12px";
+            letterCell.style.textAlign = "center";
+            bomRow.appendChild(letterCell);
+
+            // Empty item cell
+            const itemCell = document.createElement("td");
+            itemCell.style.border = "1px solid #000";
+            itemCell.style.padding = "6px 8px";
+            itemCell.style.fontSize = "12px";
+            bomRow.appendChild(itemCell);
+
+            // Empty description cell
+            const descCell = document.createElement("td");
+            descCell.style.border = "1px solid #000";
+            descCell.style.padding = "6px 8px";
+            descCell.style.fontSize = "12px";
+            bomRow.appendChild(descCell);
+
+            // Add alternating row background
+            if (i % 2 === 1) {
+              letterCell.style.backgroundColor = "#f9f9f9";
+              itemCell.style.backgroundColor = "#f9f9f9";
+              descCell.style.backgroundColor = "#f9f9f9";
+            }
+
+            bomTable.appendChild(bomRow);
+          }
+        }
 
         pdfTemplate.appendChild(bomTable);
 

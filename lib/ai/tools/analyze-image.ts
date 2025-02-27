@@ -104,33 +104,35 @@ export const analyzeImage = ({
             system:
               "Analyze this clothing item and create a structured tech pack with the following format:" +
               "## Brand\n" +
-              "[Brand Name]\n\n" +
+              "{{Brand Name}}\n\n" +
               "## Designer\n" +
-              "[Designer Name]\n\n" +
+              "{{Designer Name}}\n\n" +
               "## Description\n" +
-              "[Brief description of the garment type, e.g., WOMENSWEAR, MENSWEAR]\n\n" +
+              "{{Brief description of the garment type, e.g., WOMENSWEAR, MENSWEAR}}\n\n" +
               "## Season\n" +
-              "[Season information, e.g., SS24, FW23]\n\n" +
+              "{{Season information, e.g., SS24, FW23}}\n\n" +
               "## Style Name\n" +
-              "[Style name of the garment]\n\n" +
+              "{{Style name of the garment}}\n\n" +
               "## Style Number\n" +
-              "[Style number/code]\n\n" +
+              "{{Style number/code}}\n\n" +
               "## Main Fabric\n" +
-              "[Main fabric description]\n\n" +
+              "{{Main fabric description}}\n\n" +
+              "## Garment Color\n" +
+              "{{Overall color of the garment}}\n\n" +
               "## Size Range\n" +
-              "[Available sizes with sample size in brackets, e.g., XS S [M] L XL]\n\n" +
+              "{{Available sizes with sample size in brackets, e.g., XS S [M] L XL}}\n\n" +
               "## Measurements\n" +
-              "[Key measurements in a structured format]\n\n" +
+              "{{Key measurements in a structured format}}\n\n" +
               "## Bill of Materials\n" +
-              "Please list materials in this format - each item on a new line:\n" +
-              "- [Item name], [Description], [Color], [Code], [Quantity], [Supplier]\n" +
-              "- [Item name], [Description], [Color], [Code], [Quantity], [Supplier]\n\n" +
-              "Markdown is supported. Focus on accuracy and professional presentation.",
+              "{{BOM Item 1}}\n\n" +
+              "{{BOM Item 2}}\n\n" +
+              "{{BOM Item 3}}\n\n" +
+              "Markdown is supported. Focus on accuracy and professional presentation. Use {{Field Name}} for fields that need to be filled in by the user.",
             messages: [
               {
                 role: "user",
                 content:
-                  "Please analyze this clothing item and create a detailed tech pack following the structured format. DO not add any title or extra categories besides the template",
+                  "Please analyze this clothing item and create a detailed tech pack following the structured format. Use {{Field Name}} for fields that need to be filled in by the user. DO not add any title or extra categories besides the template",
                 experimental_attachments: [imageAttachment],
               },
             ],
@@ -151,6 +153,14 @@ export const analyzeImage = ({
               });
             }
           }
+
+          // Add metadata about fields that need user input
+          const fieldsNeedingInput = extractFieldsNeedingInput(draftContent);
+
+          dataStream.writeData({
+            type: "fields-needing-input",
+            content: fieldsNeedingInput,
+          });
 
           // Save the document with our image included
           if (args.session?.user?.id) {
@@ -180,7 +190,20 @@ export const analyzeImage = ({
         title,
         kind,
         content:
-          "A clothing tech pack analysis document was created with your uploaded image and is now visible to the user.",
+          "I've created a tech pack based on your image. I've identified several fields that need your input. Please look at the form below the chat to fill in these details one by one. As you provide information, I'll update the tech pack document with your input.",
       };
     },
   });
+
+// Function to extract fields that need user input from the content
+function extractFieldsNeedingInput(content: string): string[] {
+  const regex = /\{\{([^}]+)\}\}/g;
+  const fields: string[] = [];
+  let match;
+
+  while ((match = regex.exec(content)) !== null) {
+    fields.push(match[1]);
+  }
+
+  return [...new Set(fields)]; // Remove duplicates
+}
